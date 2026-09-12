@@ -14,8 +14,8 @@ pipeline {
         )
         string(
             name: 'FLOCI_ENDPOINT',
-            defaultValue: 'http://localhost:4566',
-            description: 'Floci AWS emulator endpoint (use http://host.docker.internal:4566 if Jenkins runs in Docker)'
+            defaultValue: 'http://172.17.0.1:4566',
+            description: 'Floci AWS emulator endpoint (uses 172.17.0.1:4566 for Docker container to host communication)'
         )
     }
 
@@ -27,6 +27,19 @@ pipeline {
     }
 
     stages {
+        stage('Configure Endpoint') {
+            steps {
+                script {
+                    // When Jenkins runs in Docker, localhost points inside the container.
+                    // Route localhost/127.0.0.1 to Docker host gateway (172.17.0.1).
+                    if (params.FLOCI_ENDPOINT.contains('localhost') || params.FLOCI_ENDPOINT.contains('127.0.0.1')) {
+                        env.TF_VAR_floci_endpoint = 'http://172.17.0.1:4566'
+                    }
+                    echo "Using Floci endpoint: ${env.TF_VAR_floci_endpoint}"
+                }
+            }
+        }
+
         stage('Terraform Init') {
             steps {
                 sh 'terraform init'
