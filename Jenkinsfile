@@ -55,15 +55,30 @@ pipeline {
             }
         }
 
+        stage('Manual Approval Gate') {
+            when {
+                expression { params.ACTION == 'apply' || params.ACTION == 'destroy' }
+            }
+            steps {
+                timeout(time: 15, unit: 'MINUTES') {
+                    input(
+                        message: "Review the plan above for '${params.ENVIRONMENT}'. Do you approve '${params.ACTION}' on Floci?",
+                        ok: "Approve and Proceed"
+                    )
+                }
+            }
+        }
+
         stage('Terraform Apply / Destroy') {
+            when {
+                expression { params.ACTION != 'plan' }
+            }
             steps {
                 script {
                     if (params.ACTION == 'apply') {
                         sh 'terraform apply -input=false tfplan'
                     } else if (params.ACTION == 'destroy') {
-                        sh 'terraform destroy -var-file="${ENVIRONMENT}.tfvars" -auto-approve'
-                    } else {
-                        echo "Action is '${params.ACTION}'. Skipping apply/destroy."
+                        sh "terraform destroy -var-file=${params.ENVIRONMENT}.tfvars -auto-approve"
                     }
                 }
             }
@@ -76,4 +91,3 @@ pipeline {
         }
     }
 }
-
