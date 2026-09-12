@@ -7,15 +7,10 @@ pipeline {
             choices: ['dev', 'stg', 'prod'],
             description: 'Target environment to deploy'
         )
-        choice(
-            name: 'ACTION',
-            choices: ['apply', 'plan', 'destroy'],
-            description: 'Terraform action to perform'
-        )
         string(
             name: 'FLOCI_ENDPOINT',
             defaultValue: 'http://172.17.0.1:4566',
-            description: 'Floci AWS emulator endpoint (uses 172.17.0.1:4566 for Docker container to host communication)'
+            description: 'Floci AWS emulator endpoint (Docker bridge host IP)'
         )
     }
 
@@ -68,30 +63,38 @@ pipeline {
             }
         }
 
-        stage('Manual Approval Gate') {
-            when {
-                expression { params.ACTION == 'apply' || params.ACTION == 'destroy' }
-            }
+        stage('Console Action Approval') {
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
-                    input(
-                        message: "Review the plan above for '${params.ENVIRONMENT}'. Do you approve '${params.ACTION}' on Floci?",
-                        ok: "Approve and Proceed"
-                    )
-                }
-            }
-        }
+                    script {
+                        def userChoice = input(
+                            id: 'ConsoleActionPrompt',
+                            message: "Review the plan above for '${ENVIRONMENT}'. Choose action to execute on Floci:",
+                            ok: "Confirm Action",
+                            parameters: [
+                                choice(
+                                    name: 'ACTION',
+                                    choices: ['apply', 'abort', 'destroy'],
+                                    description: 'Select action to execute on Floci'
+                                )
+                            ]
+                        )
 
-        stage('Terraform Apply / Destroy') {
-            when {
-                expression { params.ACTION != 'plan' }
-            }
-            steps {
-                script {
-                    if (params.ACTION == 'apply') {
-                        sh 'terraform apply -input=false tfplan'
-                    } else if (params.ACTION == 'destroy') {
-                        sh "terraform destroy -var-file=${params.ENVIRONMENT}.tfvars -auto-approve"
+                        def action = (userChoice instanceof Map) ? userChoice['ACTION'] : userChoice
+
+                        echo "Selected action from console: ${action}"
+
+                        if (action == 'apply') {
+                            echo "Applying Terraform plan on Floci..."
+                            sh 'terraform apply -input=false tfplan'
+                        } else if (action == 'destroy') {
+                            echo "Destroying Terraform resources on Floci..."
+                            sh "terraform destroy -var-file=${ENVIRONMENT}.tfvars -auto-approve"
+                        } else {
+                            echo "Aborting deployment without making changes to Floci."
+                            currentBuild.result = 'ABORTED'
+                            error("Pipeline aborted by user choice.")
+                        }
                     }
                 }
             }
