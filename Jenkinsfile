@@ -8,6 +8,11 @@ pipeline {
             description: 'Target environment to deploy'
         )
         string(
+            name: 'ALERT_EMAIL',
+            defaultValue: 'mafkh05@gmail.com',
+            description: 'Email address to receive failure notifications'
+        )
+        string(
             name: 'FLOCI_ENDPOINT',
             defaultValue: 'http://172.17.0.1:4566',
             description: 'Floci AWS emulator endpoint (Docker bridge host IP)'
@@ -104,6 +109,25 @@ pipeline {
     post {
         always {
             sh 'rm -f tfplan'
+        }
+        failure {
+            mail to: "${params.ALERT_EMAIL}",
+                 subject: "❌ [FAILED] Jenkins Pipeline: ${env.JOB_NAME} Build #${env.BUILD_NUMBER}",
+                 body: """Hi Mohamed,
+
+The Terraform deployment pipeline has FAILED on environment '${params.ENVIRONMENT}'.
+
+Build Details:
+------------------------------------------
+Job Name:    ${env.JOB_NAME}
+Build #:     #${env.BUILD_NUMBER}
+Environment: ${params.ENVIRONMENT}
+Status:      FAILED
+Console Log: ${env.BUILD_URL}console
+------------------------------------------
+
+Please check the console log at the link above to investigate the issue.
+"""
         }
     }
 }
