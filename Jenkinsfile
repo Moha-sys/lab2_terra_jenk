@@ -8,6 +8,11 @@ pipeline {
             description: 'Target environment to deploy'
         )
         string(
+            name: 'RECIPIENT_EMAIL',
+            defaultValue: 'mohamed@example.com',
+            description: 'Email address to receive failure alerts'
+        )
+        string(
             name: 'FLOCI_ENDPOINT',
             defaultValue: 'http://172.17.0.1:4566',
             description: 'Floci AWS emulator endpoint (Docker bridge host IP)'
@@ -104,6 +109,30 @@ pipeline {
     post {
         always {
             sh 'rm -f tfplan'
+        }
+        failure {
+            script {
+                try {
+                    mail to: "${params.RECIPIENT_EMAIL}",
+                         subject: "❌ BUILD FAILED: ${env.JOB_NAME} [#${env.BUILD_NUMBER}]",
+                         body: """Hello,
+
+The Terraform pipeline on Floci has FAILED for environment '${params.ENVIRONMENT}'.
+
+Build Details:
+- Job Name:    ${env.JOB_NAME}
+- Build #:     #${env.BUILD_NUMBER}
+- Environment: ${params.ENVIRONMENT}
+- Status:      FAILED
+- Console Log: ${env.BUILD_URL}console
+
+Please inspect the console output at the link above to diagnose and fix the issue.
+"""
+                    echo "Failure notification email sent successfully to ${params.RECIPIENT_EMAIL}"
+                } catch (Exception e) {
+                    echo "WARNING: Could not send email: ${e.message}. (Make sure SMTP is configured under Manage Jenkins -> System -> E-mail Notification)"
+                }
+            }
         }
     }
 }
